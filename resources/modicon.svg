@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="54.434151mm"
+   height="65.908707mm"
+   viewBox="0 0 54.434151 65.908707"
+   version="1.1"
+   id="svg1"
+   inkscape:export-filename="modicon.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   inkscape:version="1.3.2 (091e20ef0f, 2023-11-25, custom)"
+   sodipodi:docname="modicon.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#999999"
+     borderopacity="1"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="1.3881797"
+     inkscape:cx="357.66264"
+     inkscape:cy="298.23229"
+     inkscape:window-width="2560"
+     inkscape:window-height="1412"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1">
+    <linearGradient
+       id="linearGradient81"
+       inkscape:collect="always">
+      <stop
+         style="stop-color:#55d400;stop-opacity:1;"
+         offset="0"
+         id="stop81" />
+      <stop
+         style="stop-color:#8a481c;stop-opacity:1;"
+         offset="1"
+         id="stop82" />
+    </linearGradient>
+    <linearGradient
+       id="swatch79">
+      <stop
+         style="stop-color:#55d400;stop-opacity:1;"
+         offset="0"
+         id="stop79" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient81"
+       id="linearGradient82"
+       x1="74.656082"
+       y1="12.178871"
+       x2="26.758818"
+       y2="97.165176"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient81"
+       id="linearGradient83"
+       gradientUnits="userSpaceOnUse"
+       x1="149.60028"
+       y1="63.201996"
+       x2="122.24957"
+       y2="103.89527" />
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-30.247647,-21.842007)">
+    <rect
+       style="fill:#000000;stroke-width:0.264583"
+       id="rect1"
+       width="200"
+       height="200"
+       x="6.3276834"
+       y="3.7538743" />
+    <path
+       style="fill:url(#linearGradient83);fill-opacity:1;stroke-width:0.264583"
+       d="m 93.164122,78.278917 -0.13327,9.873091 79.116508,-0.266539 -0.39981,-7.871819 z"
+       id="path3" />
+    <path
+       style="fill:url(#linearGradient82);fill-opacity:1;stroke-width:0.264583"
+       d="M 30.247647,22.10929 53.72909,21.842007 84.681797,52.795459 58.665262,87.350905 31.048007,87.750711 57.731632,57.465093 Z"
+       id="path2" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:49.3889px;font-family:Almendra;-inkscape-font-specification:Almendra;fill:#c87137;fill-opacity:1;fill-rule:nonzero;stroke:#55d400;stroke-width:0.264999;stroke-dasharray:none"
+       x="25.024834"
+       y="127.33762"
+       id="text83"><tspan
+         sodipodi:role="line"
+         id="tspan83"
+         style="font-size:49.3889px;stroke:#55d400;stroke-width:0.265"
+         x="25.024834"
+         y="127.33762">Vintage</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:49.389px;font-family:'Intel One Mono';-inkscape-font-specification:'Intel One Mono';fill:#55d400;fill-opacity:1;fill-rule:nonzero;stroke:#d38d5f;stroke-width:0.264999;stroke-dasharray:none"
+       x="40.692528"
+       y="176.03523"
+       id="text84"><tspan
+         sodipodi:role="line"
+         id="tspan84"
+         style="stroke:#d38d5f;stroke-width:0.265"
+         x="40.692528"
+         y="176.03523">RCON</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:'Intel One Mono';-inkscape-font-specification:'Intel One Mono';fill:#ff00ff;fill-opacity:1;fill-rule:nonzero;stroke:#c83737;stroke-width:0.264999;stroke-dasharray:none"
+       x="159.96774"
+       y="199.38342"
+       id="text85"><tspan
+         sodipodi:role="line"
+         id="tspan85"
+         style="fill:#ff00ff;stroke:#c83737;stroke-width:0.265"
+         x="159.96774"
+         y="199.38342">by Shijikori</tspan></text>
+  </g>
+</svg>
