@@ -8,4 +8,5 @@ public class VRConCfg {
     public string IP {get; set;} = null!;
     public string Password {get; set;} = "";
     public int Timeout {get; set;} = 20;
+    public int MaxConnections {get; set;} = 10;
 }
