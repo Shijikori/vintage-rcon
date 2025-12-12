@@ -21,7 +21,7 @@
                 // "--openWorld" , "modding test world",
                 "--tracelog",
                 "--addModPath",
-                "${workspaceFolder}/vintage_rcon/bin/Debug/Mods"
+                "${workspaceFolder}/bin/mods"
             ],
             "console": "internalConsole",
             "stopAtEntry": false
@@ -41,21 +41,10 @@
             "args": [
                 "--tracelog",
                 "--addModPath",
-                "${workspaceFolder}/vintage_rcon/bin/Debug/Mods"
+                "${workspaceFolder}/bin/mods"
             ],
             "console": "internalConsole",
             "stopAtEntry": false
-        },
-        {
-            "name": "CakeBuild",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build (Cake)",
-            "program": "${workspaceFolder}/CakeBuild/bin/Debug/net7.0/CakeBuild.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/CakeBuild",
-            "stopAtEntry": false,
-            "console": "internalConsole"
         }
     ]
 }
