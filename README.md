@@ -11,7 +11,7 @@ The config file is rather small and simple. The mod will generate it for you if 
     "Port": 42425,
     "IP": null,
     "Password": "",
-    "Timeout": 15,
+    "Timeout": 20,
     "MaxConnections": 10
 }
 ```
