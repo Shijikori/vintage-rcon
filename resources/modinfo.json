@@ -2,11 +2,11 @@
     "type": "code",
     "name": "VintageRCon",
     "modid": "vintagercon",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Source RCON for VintageStory Server",
     "authors": [ "Shijikori" ],
     "side": "server",
     "dependencies": {
-        "game": "1.19.0-X"
+        "game": "1.21.0-X"
     }
 }

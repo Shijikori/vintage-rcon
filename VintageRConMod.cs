@@ -16,7 +16,7 @@ using Vintagestory.Server;
 [assembly: ModInfo("VintageRCon",
         Authors = new string[] { "Shijikori" },
         Description = "Provides a Source RCON server for server remote management and administration.",
-        Version = "1.0.0")]
+        Version = "1.1.0")]
 namespace VintageRCon
 {
     //An RCON Packet object
