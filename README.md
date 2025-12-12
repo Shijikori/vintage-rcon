@@ -11,7 +11,8 @@ The config file is rather small and simple. The mod will generate it for you if 
     "Port": 42425,
     "IP": null,
     "Password": "",
-    "Timeout": 15
+    "Timeout": 15,
+    "MaxConnections": 10
 }
 ```
 
@@ -21,7 +22,9 @@ The config file is rather small and simple. The mod will generate it for you if 
 
 **Password** is the RCON password. To comply with specification, the RCON server will not start if this is left to default empty value.
 
-**Timeout** defines the RCON connexion timeout in minutes. This is an integer value. Minimum is 1.
+**Timeout** defines the RCON connexion timeout in minutes. This is an integer value. Minimum is 1, maximum is 1440 (24 hours).
+
+**MaxConnections** defines the maximum number of concurrent RCON connections allowed. Default is 10.
 
 ## Build
 

@@ -16,10 +16,11 @@ using Vintagestory.Server;
 [assembly: ModInfo("VintageRCon",
         Authors = new string[] { "Shijikori" },
         Description = "Provides a Source RCON server for server remote management and administration.",
-        Version = "1.1.0")]
+        Version = "2.0.0")]
 namespace VintageRCon
 {
     //An RCON Packet object
+    // See: https://developer.valvesoftware.com/wiki/Source_RCON_Protocol
     class RCONPacket {
 
         public Int32 Id {get;set;}
@@ -33,18 +34,37 @@ namespace VintageRCon
         }
 
         public RCONPacket(Byte[] data) {
-            //loading the packet assuming it is data meant for RCON connexion
-            //we may get exceptions in the case it isn't.
-            Int32 size = BinaryPrimitives.ReadInt32LittleEndian(data[0..4]);
-            if (size < 10) {
-                Id = 0;
-                Type = 0;
-                Body = "";
+            // Strict validation of RCON packet structure
+            // Structure: Size(4) + ID(4) + Type(4) + Body(N) + Null(1) + Null(1)
+            
+            if (data.Length < 14) { // Min size (10) + 4 bytes for size field itself
+                 throw new FormatException("Packet buffer too small");
             }
-            else {
-                Id = BinaryPrimitives.ReadInt32LittleEndian(data[4..8]);
-                Type = BinaryPrimitives.ReadInt32LittleEndian(data[8..12]);
-                Body = Encoding.UTF8.GetString(data[12..(size+4)]).Trim('\0');
+
+            Int32 size = BinaryPrimitives.ReadInt32LittleEndian(data[0..4]);
+            
+            if (data.Length < size + 4) {
+                throw new FormatException("Packet buffer smaller than declared size");
+            }
+            
+            Id = BinaryPrimitives.ReadInt32LittleEndian(data[4..8]);
+            Type = BinaryPrimitives.ReadInt32LittleEndian(data[8..12]);
+            
+            // Validate double null terminator
+            // The packet size field does not include itself (4 bytes).
+            // So total data length is size + 4.
+            // The last two bytes of the buffer must be 0x00.
+            int totalLength = size + 4;
+            if (data[totalLength - 1] != 0x00 || data[totalLength - 2] != 0x00) {
+                throw new FormatException("Packet not properly null terminated");
+            }
+            
+            // Body starts at offset 12 and ends at totalLength - 2
+            int bodyLength = totalLength - 2 - 12;
+            if (bodyLength > 0) {
+                Body = Encoding.UTF8.GetString(data, 12, bodyLength);
+            } else {
+                Body = "";
             }
         }
 
@@ -58,21 +78,32 @@ namespace VintageRCon
          * Returns the serialized data as bytes, compliant with RCON protocol.
          */
         public Byte[] Serialize() {
-            Byte[] head = new Byte[12];
-            var span = new Span<byte>(head);
-            Byte[] body = Encoding.UTF8.GetBytes(Body); //out of concern for accuracy of the size section, we make the array of bytes now and use it going forward
-            BinaryPrimitives.WriteInt32LittleEndian(span.Slice(0,4), body.Length + 10); //enscribe the size of the packet in the header
+            Byte[] bodyBytes = Encoding.UTF8.GetBytes(Body);
+            int totalSize = 12 + bodyBytes.Length + 2; // 4(Size) + 4(ID) + 4(Type) + Body + 2(Nulls)
+            
+            Byte[] message = new byte[totalSize];
+            var span = message.AsSpan();
+            
+            BinaryPrimitives.WriteInt32LittleEndian(span.Slice(0,4), bodyBytes.Length + 10); // Size: Body + 10
             BinaryPrimitives.WriteInt32LittleEndian(span.Slice(4,4), Id);
             BinaryPrimitives.WriteInt32LittleEndian(span.Slice(8,4), Type);
-            Byte[] message = new byte[12 + body.Length + 2];
-            System.Buffer.BlockCopy(head, 0, message, 0, 12);
-            System.Buffer.BlockCopy(body, 0, message, 12, body.Length);
-            System.Buffer.BlockCopy(Encoding.UTF8.GetBytes("\0\0"), 0, message, 12 + body.Length, 2); //since C# does not null terminate strings, we append two null characters to the end of the packet to comply with protocol spec
+            
+            bodyBytes.CopyTo(span.Slice(12));
+            
+            // Last two bytes are already 0x00 from new byte[], but explicit is better
+            span[totalSize - 2] = 0x00;
+            span[totalSize - 1] = 0x00;
+            
             return message;
         }
     }
 
     public class RConServerThread {
+        private const int MaxPacketSize = 4096;
+        // 4096 (Max Packet) - 4 (Size) - 4 (ID) - 4 (Type) - 2 (Nulls) = 4082 Body Max
+        // We use this to safely split large responses into multiple packets.
+        private const int MaxBodySize = 4082; 
+
         public ICoreServerAPI Api {get;}
         public ILogger Logger {get;}
         private TcpListener? _server;
@@ -80,14 +111,16 @@ namespace VintageRCon
         private IPAddress _ip;
         private string _password;
         private int _timeout;
+        private int _maxConnections;
 
-        public RConServerThread(ICoreServerAPI api, IPAddress ip, int port, string password, int timeout) {
+        public RConServerThread(ICoreServerAPI api, IPAddress ip, int port, string password, int timeout, int maxConnections) {
             Api = api;
             Logger = api.Logger;
             _ip = ip;
             _port = port;
             _password = password;
             _timeout = timeout;
+            _maxConnections = maxConnections;
         }
 
         public void Init() {
@@ -113,23 +146,36 @@ namespace VintageRCon
             var tasks = new List<Task>();
             try {
                 while (!token.IsCancellationRequested) {
-                    Socket socket = await _server.AcceptSocketAsync(token);
-                    Logger.Notification("RCon connexion received");
-                    tasks.Add(Task.Run(() => { HandleSocket(socket, Api, _password, _timeout, token); }, token));
-                    var templ = new List<Task>();
-                    //we keep up with the tasks we start. the list is cleaned up on every connexion.
-                    //in some cases, this will cause the list to be large and remain so but in typical usage, only one or two tasks will linger.
-                    //the impact of this is unclear to me but doesn't seem to be significant.
-                    foreach (var task in tasks) {
-                        if (task.IsCompleted) {
-                            task.Dispose();
+                    try {
+                        Socket socket = await _server.AcceptSocketAsync(token);
+                        
+                        // Cleanup completed tasks to get accurate count
+                        var templ = new List<Task>();
+                        foreach (var task in tasks) {
+                            if (task.IsCompleted) {
+                                task.Dispose();
+                            }
+                            else {
+                                templ.Add(task);
+                            }
                         }
-                        else {
-                            templ.Add(task);
+                        tasks = templ;
+
+                        if (tasks.Count >= _maxConnections) {
+                            Logger.Warning($"RCON connection rejected from {socket.RemoteEndPoint}: Max concurrent connections ({_maxConnections}) reached.");
+                            socket.Close();
+                            continue;
                         }
+
+                        Logger.Notification($"RCon connection received from {socket.RemoteEndPoint}");
+                        tasks.Add(HandleSocketAsync(socket, Api, _password, _timeout, token));
                     }
-                    tasks = templ;
-                    token.ThrowIfCancellationRequested();
+                    catch (Exception e) {
+                        if (e is OperationCanceledException) throw;
+                        Logger.Error($"Error accepting RCon connection: {e.Message}");
+                        // Wait a bit before retrying to avoid tight loop in case of persistent error
+                        await Task.Delay(1000, token);
+                    }
                 }
             }
             catch (Exception e) {
@@ -142,124 +188,196 @@ namespace VintageRCon
             }
         }
 
-        internal static void HandleSocket(Socket socket, ICoreServerAPI api, string password, int timeout, CancellationToken token) {
-            socket.ReceiveTimeout = (60000 * timeout); //timeout is the amount of minutes we're waiting for
+        /*
+         * Handles an individual RCON client connection.
+         * Security Features:
+         * - Async I/O with cancellation support
+         * - Strict packet size and structure validation (Valve Spec)
+         * - Double null-terminator enforcement
+         * - Idle timeouts
+         * - Exception filtering for stability
+         * - UTF-8 safe packet splitting
+         */
+        internal static async Task HandleSocketAsync(Socket socket, ICoreServerAPI api, string password, int timeout, CancellationToken token) {
+            socket.NoDelay = true;
             api.Logger.Notification("RCon socket thread started");
-            Byte[] buf = null!;
-            int rps = 0;
-            List<RCONPacket> rpl = new List<RCONPacket>();
-            bool authentified = false;
+            
+            // Clamp timeout between 1 minute and 24 hours (1440 minutes)
+            // This prevents immediate cancellation (min) and slot exhaustion by zombies (max)
+            int safeTimeout = Math.Clamp(timeout, 1, 1440);
+            
+            using var timeoutCts = new CancellationTokenSource();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token);
+            
             try {
+                // Set initial timeout
+                timeoutCts.CancelAfter(TimeSpan.FromMinutes(safeTimeout));
+                
+                bool isSessionAuthenticated = false;
                 while (!token.IsCancellationRequested) {
-                    buf = new Byte[4096];
-                    socket.Receive(buf);
-                    if (BitConverter.ToInt32(buf[0..4]) == 0) {
-                        //if size is 0, it is likely that the connexion timed out or the client sent a wrong packet.
-                        //simply proceeding to killing the connexion is a simple, in spec, way to respond.
-                        api.Logger.Notification("RCon connexion dropped");
-                        break;
+                    // 1. Read Packet Size (4 bytes)
+                    byte[] sizeBuffer = new byte[4];
+                    int bytesRead = 0;
+                    while (bytesRead < 4) {
+                        int read = await socket.ReceiveAsync(sizeBuffer.AsMemory(bytesRead, 4 - bytesRead), SocketFlags.None, linkedCts.Token);
+                        if (read == 0) return; // Disconnected
+                        bytesRead += read;
                     }
-                    RCONPacket packet = new RCONPacket(buf);
-                    if (packet.Type == 3) { //authentication request
-                        rpl.Clear();
-                        authentified = packet.Body == password;
-                        RCONPacket resp = new RCONPacket(packet.Id, 0, "");
-                        rpl.Add(resp);
-                        var data = resp.Serialize();
-                        socket.Send(data);
-                        if (authentified) {
-                            resp = new RCONPacket(packet.Id, 2, "");
+                    
+                    // Reset timeout on successful activity
+                    timeoutCts.CancelAfter(TimeSpan.FromMinutes(safeTimeout));
+                    
+                    int packetSize = BinaryPrimitives.ReadInt32LittleEndian(sizeBuffer);
+                    
+                    // 2. Validate Size (Strict MaxPacketSize byte limit per Valve Spec)
+                    if (packetSize < 10 || packetSize > MaxPacketSize) {
+                        api.Logger.Warning($"Invalid RCON packet size: {packetSize}. Closing connection.");
+                        return;
+                    }
+
+                    // 3. Read Packet Body (Size bytes)
+                    byte[] packetBuffer = new byte[packetSize + 4]; // +4 to include the size header we already read for the RCONPacket constructor
+                    BinaryPrimitives.WriteInt32LittleEndian(packetBuffer.AsSpan(0, 4), packetSize);
+                    
+                    bytesRead = 0;
+                    while (bytesRead < packetSize) {
+                        int read = await socket.ReceiveAsync(packetBuffer.AsMemory(4 + bytesRead, packetSize - bytesRead), SocketFlags.None, linkedCts.Token);
+                        if (read == 0) return; // Disconnected
+                        bytesRead += read;
+                    }
+
+                    RCONPacket packet = new RCONPacket(packetBuffer);
+                    
+                    // Strict Packet Type Validation
+                    if (packet.Type != 3 && packet.Type != 2) {
+                        api.Logger.Warning($"Invalid RCON packet type: {packet.Type}. Closing connection.");
+                        return;
+                    }
+                    
+                    if (packet.Type == 3) { // Authentication
+                        bool authenticated = IsPasswordCorrect(packet.Body, password);
+                        
+                        // Send SERVERDATA_RESPONSE_VALUE (empty)
+                        await socket.SendAsync(new RCONPacket(packet.Id, 0, "").Serialize(), SocketFlags.None, linkedCts.Token);
+                        
+                        // Send SERVERDATA_AUTH_RESPONSE
+                        await socket.SendAsync(new RCONPacket(authenticated ? packet.Id : -1, 2, "").Serialize(), SocketFlags.None, linkedCts.Token);
+                        
+                        if (!authenticated) {
+                            await Task.Delay(2000, linkedCts.Token); // Delay to prevent brute-force
+                            return;
                         }
-                        else {
-                            resp = new RCONPacket(-1, 2, "");
+                        isSessionAuthenticated = true;
+                    }
+                    else if (packet.Type == 2) { // Command
+                        if (!isSessionAuthenticated) {
+                            // Client tried to send command without authenticating first
+                            api.Logger.Warning("RCON client attempted command without authentication. Closing connection.");
+                            return;
                         }
-                        rpl.Add(resp);
-                        data = resp.Serialize();
-                        socket.Send(data);
-                        if (!authentified) break;
-                    }
-                    else if (!authentified) { //unauthentified request which isn't for authentication
-                        RCONPacket resp = new RCONPacket(-1, 2, "");
-                        socket.Send(resp.Serialize());
-                        break;
-                    }
-                    else if (packet.Type == 2) { //command execution request
-                        rps = 0;
-                        rpl.Clear();
-                        if (packet.Body == "") {
-                            socket.Send(new RCONPacket(packet.Id, 0, "").Serialize());
+
+                        if (string.IsNullOrEmpty(packet.Body)) {
+                            await socket.SendAsync(new RCONPacket(packet.Id, 0, "").Serialize(), SocketFlags.None, linkedCts.Token);
                             continue;
                         }
+
                         string[] data = packet.Body.Split();
-                        CmdArgs args = null!;
-                        if (data.Length == 1) {
-                            args = new CmdArgs();
-                        }
-                        else {
-                            args = new CmdArgs(data[1..(data.Length)]);
-                        }
-                        api.Logger.Notification("Handling RCon Command /{0} {1}", new object[] {data[0], string.Join(' ', data[1..(data.Length)])}); //no idea why this works but it does
-                        api.ChatCommands.Execute(data[0],
-                                new TextCommandCallingArgs() {
-                                Caller = new Caller {
-                                Type = EnumCallerType.Console,
-                                CallerRole = "admin",
-                                CallerPrivileges = new string[] {"*"},
-                                FromChatGroupId = GlobalConstants.ConsoleGroup
-                                },
-                                RawArgs = args,
-                                },
-                                (TextCommandResult result)=>{
-                                if (result.StatusMessage.Length > 4083) {
-                                    for (int i = 0; i < ((int)result.StatusMessage.Length / 4083); i++) {
-                                        if (i == (int)(result.StatusMessage.Length / 4083)) {
-                                            rpl.Add(new RCONPacket(packet.Id, 0, result.StatusMessage[(i * 4083)..(result.StatusMessage.Length)]));
-                                        }
-                                        else {
-                                            rpl.Add(new RCONPacket(packet.Id, 0, result.StatusMessage[(i * 4083)..]));
+                        CmdArgs args = data.Length == 1 ? new CmdArgs() : new CmdArgs(data[1..]);
+                        
+                        api.Logger.Notification("Handling RCon Command /{0}", data[0]);
+
+                        var tcs = new TaskCompletionSource<TextCommandResult>();
+                        
+                        api.Event.EnqueueMainThreadTask(() => {
+                            try {
+                                api.ChatCommands.Execute(data[0],
+                                    new TextCommandCallingArgs() {
+                                        Caller = new Caller {
+                                            Type = EnumCallerType.Console,
+                                            CallerRole = "admin",
+                                            CallerPrivileges = new string[] {"*"},
+                                            FromChatGroupId = GlobalConstants.ConsoleGroup
+                                        },
+                                        RawArgs = args,
+                                    },
+                                    (TextCommandResult result) => {
+                                        tcs.TrySetResult(result);
+                                    });
+                            } catch (Exception ex) {
+                                tcs.TrySetException(ex);
+                            }
+                        }, "RConCommand");
+
+                        try {
+                            TextCommandResult result = await tcs.Task.WaitAsync(linkedCts.Token);
+                            
+                            string message = result.StatusMessage ?? "";
+                            byte[] messageBytes = Encoding.UTF8.GetBytes(message);
+                            
+                            // Split into MaxBodySize byte chunks (safe margin below MaxPacketSize)
+                            if (messageBytes.Length > MaxBodySize) {
+                                int currentPos = 0;
+                                while (currentPos < messageBytes.Length) {
+                                    int length = Math.Min(MaxBodySize, messageBytes.Length - currentPos);
+                                    
+                                    // UTF-8 Safety: Ensure we don't split inside a multi-byte character
+                                    if (currentPos + length < messageBytes.Length) {
+                                        // If the first byte of the NEXT chunk is a continuation byte (0b10xxxxxx),
+                                        // we have split a character. Backtrack until we find the start.
+                                        while (length > 0 && (messageBytes[currentPos + length] & 0xC0) == 0x80) {
+                                            length--;
                                         }
                                     }
+                                    
+                                    if (length == 0) {
+                                        // Should not happen unless a single character is larger than MaxBodySize (impossible for UTF-8)
+                                        // or logic error. Force progress to avoid infinite loop.
+                                        length = Math.Min(MaxBodySize, messageBytes.Length - currentPos);
+                                    }
+
+                                    string chunk = Encoding.UTF8.GetString(messageBytes, currentPos, length);
+                                    await socket.SendAsync(new RCONPacket(packet.Id, 0, chunk).Serialize(), SocketFlags.None, linkedCts.Token);
+                                    currentPos += length;
                                 }
-                                else {
-                                    rpl.Add(new RCONPacket(packet.Id, 0, result.StatusMessage));
-                                }
-                                });
-                        socket.Send(rpl[0].Serialize());
-                    }
-                    else if (packet.Type == 0) { //get more data request (according to spec)
-                        if (rps >= (rpl.Count - 1) || rpl.Count == 0) {
-                            var resp = new RCONPacket();
-                            resp.Id = packet.Id;
-                            var message = resp.Serialize();
-                            socket.Send(message);
-                            if (rps > 0 || rpl.Count > 0) {
-                                rps = 0;
-                                rpl.Clear();
+                            } else {
+                                await socket.SendAsync(new RCONPacket(packet.Id, 0, message).Serialize(), SocketFlags.None, linkedCts.Token);
                             }
-                        }
-                        else {
-                            var message = rpl[rps + 1].Serialize();
-                            socket.Send(message);
-                            rps++;
+                        } catch (Exception ex) {
+                            api.Logger.Error("Error executing RCon command: " + ex.Message);
+                            await socket.SendAsync(new RCONPacket(packet.Id, 0, "Error executing command").Serialize(), SocketFlags.None, linkedCts.Token);
                         }
                     }
                 }
-                rpl.Clear();
-                api.Logger.Notification("RCon socket closed");
-                socket.Shutdown(SocketShutdown.Both);
-                socket.Close();
+            }
+            catch (FormatException fe) {
+                api.Logger.Warning($"RCon Malformed Packet: {fe.Message}. Closing connection.");
+            }
+            catch (OperationCanceledException) {
+                // Expected on timeout or shutdown
             }
             catch (Exception e) {
-                if (e is OperationCanceledException) {
-                    api.Logger.Notification("Shutting down RCon connexion"); //we don't really care about a disconnect that doesn't happen because of cancellation
+                if (!(e is SocketException) && !(e is ObjectDisposedException)) {
+                    api.Logger.Error($"RCon Error: {e.Message}");
                 }
-                rpl.Clear();
-                socket.Shutdown(SocketShutdown.Both);
-                socket.Close();
             }
             finally {
-                socket.Dispose();
+                try {
+                    socket.Shutdown(SocketShutdown.Both);
+                    socket.Close();
+                    socket.Dispose();
+                } catch {}
+                api.Logger.Notification("RCon socket closed");
             }
+        }
+
+        private static bool IsPasswordCorrect(string input, string password) {
+            // Constant-time comparison to prevent timing attacks
+            if (input.Length != password.Length) return false;
+            int result = 0;
+            for (int i = 0; i < input.Length; i++) {
+                result |= input[i] ^ password[i];
+            }
+            return result == 0;
         }
 
         public void Dispose() {
@@ -279,10 +397,10 @@ namespace VintageRCon
             Api = api;
             Api.Event.ServerRunPhase(EnumServerRunPhase.RunGame, OnRunGame);
             if (config.IP is null) {
-                rcst = new RConServerThread(api, IPAddress.Any, config.Port, config.Password, config.Timeout);
+                rcst = new RConServerThread(api, IPAddress.Any, config.Port, config.Password, config.Timeout, config.MaxConnections);
             }
             else {
-                rcst = new RConServerThread(api, IPAddress.Parse(config.IP), config.Port, config.Password, config.Timeout);
+                rcst = new RConServerThread(api, IPAddress.Parse(config.IP), config.Port, config.Password, config.Timeout, config.MaxConnections);
             }
         }
         public void OnRunGame() {
