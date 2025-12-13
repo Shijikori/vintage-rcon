@@ -7,6 +7,6 @@
     "authors": [ "Shijikori" ],
     "side": "server",
     "dependencies": {
-        "game": "1.21.0-X"
+        "game": "1.21.0"
     }
 }

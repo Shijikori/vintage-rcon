@@ -42,3 +42,4 @@ Thanks to Th3Dilli for providing help injecting commands.
 
 Thanks to SeveredSkullz for helping me sort out issues with the config file. You are a great rubber ducky!
 
+Thanks to @testott, your entire rework of the mod is impressive! It will surely serve many.
