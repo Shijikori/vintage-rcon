@@ -16,7 +16,7 @@ using Vintagestory.Server;
 [assembly: ModInfo("VintageRCon",
         Authors = new string[] { "Shijikori" },
         Description = "Provides a Source RCON server for server remote management and administration.",
-        Version = "2.0.0")]
+        Version = "2.0.1")]
 namespace VintageRCon
 {
     //An RCON Packet object
@@ -208,7 +208,8 @@ namespace VintageRCon
             
             using var timeoutCts = new CancellationTokenSource();
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token);
-            
+            List<string> storedChunks = new List<string>();
+
             try {
                 // Set initial timeout
                 timeoutCts.CancelAfter(TimeSpan.FromMinutes(safeTimeout));
@@ -249,7 +250,7 @@ namespace VintageRCon
                     RCONPacket packet = new RCONPacket(packetBuffer);
                     
                     // Strict Packet Type Validation
-                    if (packet.Type != 3 && packet.Type != 2) {
+                    if (packet.Type != 3 && packet.Type != 2 && packet.Type != 0) {
                         api.Logger.Warning($"Invalid RCON packet type: {packet.Type}. Closing connection.");
                         return;
                     }
@@ -280,14 +281,15 @@ namespace VintageRCon
                             await socket.SendAsync(new RCONPacket(packet.Id, 0, "").Serialize(), SocketFlags.None, linkedCts.Token);
                             continue;
                         }
-
+                        
                         string[] data = packet.Body.Split();
                         CmdArgs args = data.Length == 1 ? new CmdArgs() : new CmdArgs(data[1..]);
-                        
+
                         api.Logger.Notification("Handling RCon Command /{0}", data[0]);
 
                         var tcs = new TaskCompletionSource<TextCommandResult>();
-                        
+                        storedChunks.Clear();
+
                         api.Event.EnqueueMainThreadTask(() => {
                             try {
                                 api.ChatCommands.Execute(data[0],
@@ -313,7 +315,7 @@ namespace VintageRCon
                             
                             string message = result.StatusMessage ?? "";
                             byte[] messageBytes = Encoding.UTF8.GetBytes(message);
-                            
+
                             // Split into MaxBodySize byte chunks (safe margin below MaxPacketSize)
                             if (messageBytes.Length > MaxBodySize) {
                                 int currentPos = 0;
@@ -336,15 +338,33 @@ namespace VintageRCon
                                     }
 
                                     string chunk = Encoding.UTF8.GetString(messageBytes, currentPos, length);
-                                    await socket.SendAsync(new RCONPacket(packet.Id, 0, chunk).Serialize(), SocketFlags.None, linkedCts.Token);
+                                    storedChunks.Add(chunk);
                                     currentPos += length;
                                 }
+                                await socket.SendAsync(new RCONPacket(packet.Id, 0, storedChunks[0]).Serialize(), SocketFlags.None, linkedCts.Token); //send the first chunk only
+                                storedChunks.RemoveAt(0);
+                                storedChunks.TrimExcess();
                             } else {
                                 await socket.SendAsync(new RCONPacket(packet.Id, 0, message).Serialize(), SocketFlags.None, linkedCts.Token);
                             }
                         } catch (Exception ex) {
                             api.Logger.Error("Error executing RCon command: " + ex.Message);
                             await socket.SendAsync(new RCONPacket(packet.Id, 0, "Error executing command").Serialize(), SocketFlags.None, linkedCts.Token);
+                        }
+                    }
+                    else if (packet.Type == 0) {
+                        if (!isSessionAuthenticated) {
+                            // Client tried to send command without authenticating first
+                            api.Logger.Warning("RCON client attempted command without authentication. Closing connection.");
+                            return;
+                        }
+                        if (storedChunks.Count != 0) {
+                            await socket.SendAsync(new RCONPacket(packet.Id, 0, storedChunks[0]).Serialize(), SocketFlags.None, linkedCts.Token); //send the first chunk in the list
+                            storedChunks.RemoveAt(0); // removing the chunk that was just sent
+                            storedChunks.TrimExcess(); // making sure that capacity aligns with count just in case
+                        }
+                        else {
+                            await socket.SendAsync(new RCONPacket(packet.Id, 0, "").Serialize(), SocketFlags.None, linkedCts.Token);
                         }
                     }
                 }
