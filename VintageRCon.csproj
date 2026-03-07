@@ -15,7 +15,7 @@
     <Reference Include="VintagestoryLib" HintPath="$(VINTAGE_STORY)/VintagestoryLib.dll" Private="false" />
     <Reference Include="VintagestoryServer" HintPath="$(VINTAGE_STORY)/VintagestoryServer.dll" Private="false" />
     <Reference Include="Newtonsoft.Json" HintPath="$(VINTAGE_STORY)/Lib/Newtonsoft.Json.dll" Private="false" />
-    <None Include="resources/**" CopyToOutputDirectory="PreserveNewest" Pack="true" PackagePath="">
+    <None Include="resources/modicon.png;resources/modinfo.json" CopyToOutputDirectory="PreserveNewest" Pack="true" PackagePath="">
       <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
     </None>
   </ItemGroup>

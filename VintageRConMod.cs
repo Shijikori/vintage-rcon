@@ -16,7 +16,7 @@ using Vintagestory.Server;
 [assembly: ModInfo("VintageRCon",
         Authors = new string[] { "Shijikori" },
         Description = "Provides a Source RCON server for server remote management and administration.",
-        Version = "2.0.1")]
+        Version = "2.0.2")]
 namespace VintageRCon
 {
     //An RCON Packet object
@@ -162,7 +162,7 @@ namespace VintageRCon
                         tasks = templ;
 
                         if (tasks.Count >= _maxConnections) {
-                            Logger.Warning($"RCON connection rejected from {socket.RemoteEndPoint}: Max concurrent connections ({_maxConnections}) reached.");
+                            Logger.Warning($"RCon connection rejected from {socket.RemoteEndPoint}: Max concurrent connections ({_maxConnections}) reached.");
                             socket.Close();
                             continue;
                         }
@@ -232,7 +232,7 @@ namespace VintageRCon
                     
                     // 2. Validate Size (Strict MaxPacketSize byte limit per Valve Spec)
                     if (packetSize < 10 || packetSize > MaxPacketSize) {
-                        api.Logger.Warning($"Invalid RCON packet size: {packetSize}. Closing connection.");
+                        api.Logger.Warning($"Invalid RCon packet size: {packetSize}. Closing connection.");
                         return;
                     }
 
@@ -251,7 +251,7 @@ namespace VintageRCon
                     
                     // Strict Packet Type Validation
                     if (packet.Type != 3 && packet.Type != 2 && packet.Type != 0) {
-                        api.Logger.Warning($"Invalid RCON packet type: {packet.Type}. Closing connection.");
+                        api.Logger.Warning($"Invalid RCon packet type: {packet.Type}. Closing connection.");
                         return;
                     }
                     
@@ -273,7 +273,7 @@ namespace VintageRCon
                     else if (packet.Type == 2) { // Command
                         if (!isSessionAuthenticated) {
                             // Client tried to send command without authenticating first
-                            api.Logger.Warning("RCON client attempted command without authentication. Closing connection.");
+                            api.Logger.Warning("RCon client attempted command without authentication. Closing connection.");
                             return;
                         }
 
@@ -285,7 +285,7 @@ namespace VintageRCon
                         string[] data = packet.Body.Split();
                         CmdArgs args = data.Length == 1 ? new CmdArgs() : new CmdArgs(data[1..]);
 
-                        api.Logger.Notification("Handling RCon Command /{0}", data[0]);
+                        api.Logger.Notification($"RCon Handling Command '/{packet.Body}' from {socket.RemoteEndPoint}");
 
                         var tcs = new TaskCompletionSource<TextCommandResult>();
                         storedChunks.Clear();
@@ -355,7 +355,7 @@ namespace VintageRCon
                     else if (packet.Type == 0) {
                         if (!isSessionAuthenticated) {
                             // Client tried to send command without authenticating first
-                            api.Logger.Warning("RCON client attempted command without authentication. Closing connection.");
+                            api.Logger.Warning("RCon client attempted command without authentication. Closing connection.");
                             return;
                         }
                         if (storedChunks.Count != 0) {

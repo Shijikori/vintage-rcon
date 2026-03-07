@@ -2,7 +2,7 @@
     "type": "code",
     "name": "VintageRCon",
     "modid": "vintagercon",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "description": "Source RCON for VintageStory Server",
     "authors": [ "Shijikori" ],
     "side": "server",
