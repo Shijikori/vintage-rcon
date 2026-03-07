@@ -139,7 +139,6 @@ namespace VintageRCon
         public async void StartListenerAsync(CancellationToken token) {
             if (_server is null) {
                 Logger.Error("Could not start listening for sockets");
-                Logger.Notification($"obj:{_server}");
                 return;
             }
             Logger.Notification("Listening for RCon connexions...");
